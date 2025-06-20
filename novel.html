@@ -1,0 +1,251 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Webtoon Library</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Quicksand:wght@400;600&display=swap');
+    body {
+      margin:0; padding:20px;
+      font-family:'Quicksand',sans-serif;
+      background:#fff6f9;
+    }
+    h1 { text-align:center; color:#ff6fa1; font-size:1.8em; }
+    #search {
+      width:100%; padding:10px; border:2px solid #ffd9e8;
+      border-radius:10px; box-sizing:border-box; margin:15px 0;
+    }
+    #topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    #editToggle {
+      padding: 6px 10px;
+      background: #ffb3c6;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.9em;
+      cursor: pointer;
+    }
+    #grid {
+      display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr));
+      gap:15px;
+    }
+    .card {
+      background:white; border-radius:12px;
+      overflow:hidden; box-shadow:0 2px 5px rgba(255,175,200,0.3);
+      display:flex; flex-direction:column; cursor:pointer;
+      position:relative;
+    }
+    .card img {
+      width:100%; height:0; padding-bottom:100%;
+      object-fit:cover;
+    }
+    .info {
+      padding:8px; text-align:center;
+      font-weight:600; color:#444;
+    }
+    .remove, .edit {
+      position:absolute;
+      background:#ffd6dd;
+      border:none;
+      border-radius:8px;
+      padding:4px;
+      font-size:14px;
+      cursor:pointer;
+      display: none;
+    }
+    .remove { top:6px; right:6px; }
+    .edit { top:6px; left:6px; }
+    .edit-mode .remove,
+    .edit-mode .edit {
+      display: block;
+    }
+    .add-card {
+      background:#ffebed; border:2px dashed #ffb3c6;
+      display:flex; align-items:center; justify-content:center;
+      font-size:2em; text-align:center;
+    }
+    .add-card:hover { background:#ffe0e2; }
+
+    .modal {
+      position:fixed; top:0; left:0;
+      width:100%; height:100%;
+      background:rgba(0,0,0,0.4);
+      display:flex; align-items:center;
+      justify-content:center;
+      z-index:99;
+    }
+    .modal-content {
+      background:white;
+      padding:20px;
+      border-radius:12px;
+      width:90%;
+      max-width:400px;
+      box-shadow:0 2px 8px rgba(0,0,0,0.2);
+    }
+    .modal-content h2 {
+      margin-top:0;
+      color:#ff6fa1;
+    }
+    .modal-content input {
+      width:100%; padding:10px;
+      margin-bottom:10px;
+      border:2px solid #ffd9e8;
+      border-radius:10px;
+      font-family:inherit;
+    }
+    .modal-content button {
+      padding:10px 16px;
+      background:#ffb3c6;
+      border:none;
+      color:white;
+      border-radius:10px;
+      cursor:pointer;
+      font-weight:bold;
+    }
+    .modal-content button:hover {
+      background:#ff94b8;
+    }
+  </style>
+</head>
+<body>
+  <div id="topbar">
+    <h1>💖 My Novel</h1>
+    <button id="editToggle" onclick="toggleEdit()">✏️ Edit</button>
+  </div>
+  <input type="text" id="search" placeholder="Search..." oninput="renderGrid()" />
+  <div id="grid"></div>
+
+  <!-- Modal Form -->
+  <div id="modal" class="modal" style="display:none;">
+    <div class="modal-content">
+      <h2 id="modalTitle">Add New Novel</h2>
+      <input type="text" id="titleInput" placeholder="Title" />
+      <input type="url" id="linkInput" placeholder="Link (https://...)" />
+      <input type="file" id="imageInput" accept="image/*" />
+      <button onclick="submitForm()">Save</button>
+    </div>
+  </div>
+
+  <script>
+    const storageKey = 'NovelList';
+    let items = JSON.parse(localStorage.getItem(storageKey)||'[]');
+    let editIndex = null;
+    let editMode = false;
+
+    function save(){ localStorage.setItem(storageKey, JSON.stringify(items)); }
+
+    function renderGrid(){
+      const search = document.getElementById('search').value.toLowerCase();
+      const grid = document.getElementById('grid');
+      grid.className = editMode ? 'edit-mode' : '';
+      grid.innerHTML = '';
+
+      items.filter(i => i.title.toLowerCase().includes(search)).forEach((item,index)=>{
+        const div = document.createElement('div');
+        div.className='card';
+        div.onclick = ()=>!editMode && window.open(item.link,'_blank');
+
+        const img = document.createElement('img');
+        img.src = item.img || '';
+        div.appendChild(img);
+
+        const info = document.createElement('div');
+        info.className='info';
+        info.textContent=item.title;
+        div.appendChild(info);
+
+        const btnDel = document.createElement('button');
+        btnDel.className='remove';
+        btnDel.textContent='✖';
+        btnDel.onclick=(e)=>{
+          e.stopPropagation();
+          items.splice(index,1);
+          save(); renderGrid();
+        };
+        div.appendChild(btnDel);
+
+        const btnEdit = document.createElement('button');
+        btnEdit.className='edit';
+        btnEdit.textContent='📝';
+        btnEdit.onclick=(e)=>{
+          e.stopPropagation();
+          openEdit(index);
+        };
+        div.appendChild(btnEdit);
+
+        grid.appendChild(div);
+      });
+
+      const add = document.createElement('div');
+      add.className='card add-card';
+      add.textContent='➕';
+      add.onclick=()=>openAdd();
+      grid.appendChild(add);
+    }
+
+    function toggleEdit() {
+      editMode = !editMode;
+      renderGrid();
+    }
+
+    function openAdd() {
+      editIndex = null;
+      document.getElementById('modalTitle').textContent = 'Add New Webtoon';
+      document.getElementById('titleInput').value = '';
+      document.getElementById('linkInput').value = '';
+      document.getElementById('imageInput').value = '';
+      document.getElementById('modal').style.display = 'flex';
+    }
+
+    function openEdit(index) {
+      editIndex = index;
+      const item = items[index];
+      document.getElementById('modalTitle').textContent = 'Edit Webtoon';
+      document.getElementById('titleInput').value = item.title;
+      document.getElementById('linkInput').value = item.link;
+      document.getElementById('imageInput').value = '';
+      document.getElementById('modal').style.display = 'flex';
+    }
+
+    function submitForm() {
+      const title = document.getElementById('titleInput').value.trim();
+      const link = document.getElementById('linkInput').value.trim();
+      const file = document.getElementById('imageInput').files[0];
+
+      if (!title || !link) return alert('Title and link are required!');
+
+      const finish = (img) => {
+        const data = { title, link, img };
+        if (editIndex !== null) {
+          if (!img) data.img = items[editIndex].img;
+          items[editIndex] = data;
+        } else {
+          items.push(data);
+        }
+        save(); closeForm();
+      };
+
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = e => finish(e.target.result);
+        reader.readAsDataURL(file);
+      } else {
+        finish('');
+      }
+    }
+
+    function closeForm(){
+      document.getElementById('modal').style.display='none';
+      renderGrid();
+    }
+
+    renderGrid();
+  </script>
+</body>
+</html>
